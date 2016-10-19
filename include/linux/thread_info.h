@@ -15,15 +15,6 @@ struct timespec;
 struct compat_timespec;
 
 #ifdef CONFIG_THREAD_INFO_IN_TASK
-struct thread_info {
-	u32			flags;		/* low level flags */
-};
-
-#define INIT_THREAD_INFO(tsk)			\
-{						\
-	.flags		= 0,			\
-}
-#endif
 
 /*
  * For CONFIG_THREAD_INFO_IN_TASK kernels we need <asm/current.h> for the
@@ -31,7 +22,6 @@ struct thread_info {
  * including <asm/current.h> can cause a circular dependency on some platforms.
  */
 #include <asm/current.h>
-#ifdef CONFIG_THREAD_INFO_IN_TASK
 #define current_thread_info() ((struct thread_info *)current)
 #endif
 
