@@ -209,6 +209,14 @@ struct segment_allocation {
 	void (*allocate_segment)(struct f2fs_sb_info *, int, bool);
 };
 
+#define MAX_SKIP_GC_COUNT			16
+
+struct inmem_pages {
+	struct list_head list;
+	struct page *page;
+	block_t old_addr;		/* for revoking when fail to commit */
+};
+
 /*
  * this value is set in page as a private data which indicate that
  * the page is atomically written, and it is in inmem_pages list.
@@ -220,14 +228,6 @@ struct segment_allocation {
 		(page_private(page) == (unsigned long)ATOMIC_WRITTEN_PAGE)
 #define IS_DUMMY_WRITTEN_PAGE(page)			\
 		(page_private(page) == (unsigned long)DUMMY_WRITTEN_PAGE)
-
-#define MAX_SKIP_GC_COUNT			16
-
-struct inmem_pages {
-	struct list_head list;
-	struct page *page;
-	block_t old_addr;		/* for revoking when fail to commit */
-};
 
 struct sit_info {
 	const struct segment_allocation *s_ops;
