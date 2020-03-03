@@ -11,6 +11,7 @@
 #include <linux/backing-dev.h>
 #include <linux/lzo.h>
 #include <linux/lz4.h>
+#include <linux/zstd.h>
 
 #include "f2fs.h"
 #include "node.h"
@@ -292,6 +293,165 @@ static const struct f2fs_compress_ops f2fs_lz4_ops = {
 };
 #endif
 
+#ifdef CONFIG_F2FS_FS_ZSTD
+#define F2FS_ZSTD_DEFAULT_CLEVEL	1
+
+static int zstd_init_compress_ctx(struct compress_ctx *cc)
+{
+	zstd_parameters params;
+	zstd_cstream *stream;
+	void *workspace;
+	size_t workspace_size;
+
+	params = zstd_get_params(F2FS_ZSTD_DEFAULT_CLEVEL, cc->rlen);
+	workspace_size = zstd_cstream_workspace_bound(&params.cParams);
+
+	workspace = f2fs_kvmalloc(F2FS_I_SB(cc->inode),
+					workspace_size, GFP_NOFS);
+	if (!workspace)
+		return -ENOMEM;
+
+	stream = zstd_init_cstream(&params, 0, workspace, workspace_size);
+	if (!stream) {
+		printk_ratelimited("%sF2FS-fs (%s): %s ZSTD_initCStream failed\n",
+				KERN_ERR, F2FS_I_SB(cc->inode)->sb->s_id,
+				__func__);
+		kvfree(workspace);
+		return -EIO;
+	}
+
+	cc->private = workspace;
+	cc->private2 = stream;
+
+	cc->clen = cc->rlen - PAGE_SIZE - COMPRESS_HEADER_SIZE;
+	return 0;
+}
+
+static void zstd_destroy_compress_ctx(struct compress_ctx *cc)
+{
+	kvfree(cc->private);
+	cc->private = NULL;
+	cc->private2 = NULL;
+}
+
+static int zstd_compress_pages(struct compress_ctx *cc)
+{
+	zstd_cstream *stream = cc->private2;
+	zstd_in_buffer inbuf;
+	zstd_out_buffer outbuf;
+	size_t src_size = cc->rlen;
+	size_t dst_size = src_size - PAGE_SIZE - COMPRESS_HEADER_SIZE;
+	size_t ret;
+
+	inbuf.pos = 0;
+	inbuf.src = cc->rbuf;
+	inbuf.size = src_size;
+
+	outbuf.pos = 0;
+	outbuf.dst = cc->cbuf->cdata;
+	outbuf.size = dst_size;
+
+	ret = zstd_compress_stream(stream, &outbuf, &inbuf);
+	if (zstd_is_error(ret)) {
+		printk_ratelimited("%sF2FS-fs (%s): %s ZSTD_compressStream failed, ret: %d\n",
+				KERN_ERR, F2FS_I_SB(cc->inode)->sb->s_id,
+				__func__, zstd_get_error_code(ret));
+		return -EIO;
+	}
+
+	ret = zstd_end_stream(stream, &outbuf);
+	if (zstd_is_error(ret)) {
+		printk_ratelimited("%sF2FS-fs (%s): %s ZSTD_endStream returned %d\n",
+				KERN_ERR, F2FS_I_SB(cc->inode)->sb->s_id,
+				__func__, zstd_get_error_code(ret));
+		return -EIO;
+	}
+
+	cc->clen = outbuf.pos;
+	return 0;
+}
+
+static int zstd_init_decompress_ctx(struct decompress_io_ctx *dic)
+{
+	zstd_dstream *stream;
+	void *workspace;
+	size_t workspace_size;
+
+	workspace_size = zstd_dstream_workspace_bound(MAX_COMPRESS_WINDOW_SIZE);
+
+	workspace = f2fs_kvmalloc(F2FS_I_SB(dic->inode),
+					workspace_size, GFP_NOFS);
+	if (!workspace)
+		return -ENOMEM;
+
+	stream = zstd_init_dstream(MAX_COMPRESS_WINDOW_SIZE,
+					workspace, workspace_size);
+	if (!stream) {
+		printk_ratelimited("%sF2FS-fs (%s): %s ZSTD_initDStream failed\n",
+				KERN_ERR, F2FS_I_SB(dic->inode)->sb->s_id,
+				__func__);
+		kvfree(workspace);
+		return -EIO;
+	}
+
+	dic->private = workspace;
+	dic->private2 = stream;
+
+	return 0;
+}
+
+static void zstd_destroy_decompress_ctx(struct decompress_io_ctx *dic)
+{
+	kvfree(dic->private);
+	dic->private = NULL;
+	dic->private2 = NULL;
+}
+
+static int zstd_decompress_pages(struct decompress_io_ctx *dic)
+{
+	zstd_dstream *stream = dic->private2;
+	zstd_in_buffer inbuf;
+	zstd_out_buffer outbuf;
+	size_t ret;
+
+	inbuf.pos = 0;
+	inbuf.src = dic->cbuf->cdata;
+	inbuf.size = dic->clen;
+
+	outbuf.pos = 0;
+	outbuf.dst = dic->rbuf;
+	outbuf.size = dic->rlen;
+
+	ret = zstd_decompress_stream(stream, &outbuf, &inbuf);
+	if (zstd_is_error(ret)) {
+		printk_ratelimited("%sF2FS-fs (%s): %s ZSTD_compressStream failed, ret: %d\n",
+				KERN_ERR, F2FS_I_SB(dic->inode)->sb->s_id,
+				__func__, zstd_get_error_code(ret));
+		return -EIO;
+	}
+
+	if (dic->rlen != outbuf.pos) {
+		printk_ratelimited("%sF2FS-fs (%s): %s ZSTD invalid rlen:%zu, "
+				"expected:%lu\n", KERN_ERR,
+				F2FS_I_SB(dic->inode)->sb->s_id,
+				__func__, dic->rlen,
+				PAGE_SIZE << dic->log_cluster_size);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static const struct f2fs_compress_ops f2fs_zstd_ops = {
+	.init_compress_ctx	= zstd_init_compress_ctx,
+	.destroy_compress_ctx	= zstd_destroy_compress_ctx,
+	.compress_pages		= zstd_compress_pages,
+	.init_decompress_ctx	= zstd_init_decompress_ctx,
+	.destroy_decompress_ctx	= zstd_destroy_decompress_ctx,
+	.decompress_pages	= zstd_decompress_pages,
+};
+#endif
+
 static const struct f2fs_compress_ops *f2fs_cops[COMPRESS_MAX] = {
 #ifdef CONFIG_F2FS_FS_LZO
 	&f2fs_lzo_ops,
@@ -300,6 +460,11 @@ static const struct f2fs_compress_ops *f2fs_cops[COMPRESS_MAX] = {
 #endif
 #ifdef CONFIG_F2FS_FS_LZ4
 	&f2fs_lz4_ops,
+#else
+	NULL,
+#endif
+#ifdef CONFIG_F2FS_FS_ZSTD
+	&f2fs_zstd_ops,
 #else
 	NULL,
 #endif
