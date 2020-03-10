@@ -1844,10 +1844,10 @@ static int f2fs_setflags_common(struct inode *inode, u32 iflags, u32 mask)
 	}
 
 	if ((iflags ^ fi->i_flags) & F2FS_COMPR_FL) {
-		if (S_ISREG(inode->i_mode) &&
-			(fi->i_flags & F2FS_COMPR_FL || i_size_read(inode) ||
-						F2FS_HAS_BLOCKS(inode)))
-			return -EINVAL;
+		if (S_ISREG(inode->i_mode) && (fi->i_flags & F2FS_COMPR_FL)) {
+			if (f2fs_disable_compressed_file(inode))
+				return -EINVAL;
+		}
 		if (iflags & F2FS_NOCOMP_FL)
 			return -EINVAL;
 		if (iflags & F2FS_COMPR_FL) {
