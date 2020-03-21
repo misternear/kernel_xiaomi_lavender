@@ -1192,19 +1192,21 @@ void f2fs_decompress_end_io(struct page **rpages,
 		if (!rpage)
 			continue;
 
-		if (err || PageError(rpage)) {
-			ClearPageUptodate(rpage);
-			ClearPageError(rpage);
-		} else {
+		if (err || PageError(rpage))
+			goto clear_uptodate;
+
 #ifdef CONFIG_FS_VERITY
-			if (!verity || fsverity_verify_page(rpage))
+		if (!verity || fsverity_verify_page(rpage)) {
 #else
-			if (!verity)
+		if (!verity) {
 #endif
-				SetPageUptodate(rpage);
-			else
-				SetPageError(rpage);
+			SetPageUptodate(rpage);
+			goto unlock;
 		}
+clear_uptodate:
+		ClearPageUptodate(rpage);
+		ClearPageError(rpage);
+unlock:
 		unlock_page(rpage);
 	}
 }
