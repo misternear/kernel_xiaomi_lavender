@@ -819,6 +819,8 @@ int f2fs_getattr(struct vfsmount *mnt,
 	}
 
 	flags = fi->i_flags;
+	if (flags & F2FS_COMPR_FL)
+		stat->attributes |= STATX_ATTR_COMPRESSED;
 	if (flags & F2FS_APPEND_FL)
 		stat->attributes |= STATX_ATTR_APPEND;
 	if (flags & F2FS_COMPR_FL)
@@ -830,7 +832,8 @@ int f2fs_getattr(struct vfsmount *mnt,
 	if (flags & F2FS_NODUMP_FL)
 		stat->attributes |= STATX_ATTR_NODUMP;
 
-	stat->attributes_mask |= (STATX_ATTR_APPEND |
+	stat->attributes_mask |= (STATX_ATTR_COMPRESSED |
+				  STATX_ATTR_APPEND |
 				  STATX_ATTR_ENCRYPTED |
 				  STATX_ATTR_IMMUTABLE |
 				  STATX_ATTR_NODUMP);
