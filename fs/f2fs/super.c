@@ -3881,7 +3881,14 @@ static int __init init_f2fs_fs(void)
 	if (err)
 		goto free_bio_entry_cache;
 	f2fs_init_rapid_gc();
+	err = f2fs_init_compress_mempool();
+	if (err)
+		f2fs_destroy_rapid_gc();
+	if (err)
+		goto free_bioset;
 	return 0;
+free_bioset:
+	f2fs_destroy_bioset();
 free_bio_entry_cache:
 	f2fs_destroy_bio_entry_cache();
 free_post_read:
@@ -3909,6 +3916,7 @@ fail:
 
 static void __exit exit_f2fs_fs(void)
 {
+	f2fs_destroy_compress_mempool();
 	f2fs_destroy_rapid_gc();
 	f2fs_destroy_bioset();
 	f2fs_destroy_bio_entry_cache();

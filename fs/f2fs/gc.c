@@ -336,7 +336,7 @@ void __init f2fs_init_rapid_gc(void)
         fb_register_client(&fb_notifier_block);
 }
 
-void __exit f2fs_destroy_rapid_gc(void)
+void f2fs_destroy_rapid_gc(void)
 {
         fb_unregister_client(&fb_notifier_block);
 	wakeup_source_trash(&gc_wakelock);
