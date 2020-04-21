@@ -118,6 +118,7 @@ static enum count_type __read_io_type(struct page *page)
 /* postprocessing steps for read bios */
 enum bio_post_read_step {
 	STEP_DECRYPT,
+	STEP_DECOMPRESS_NOWQ,		/* handle normal cluster data inplace */
 	STEP_DECOMPRESS,
 };
 
@@ -902,7 +903,7 @@ static struct bio *f2fs_grab_read_bio(struct inode *inode, block_t blkaddr,
 		post_read_steps |= 1 << STEP_DECRYPT;
 #ifdef CONFIG_F2FS_FS_COMPRESSION
 	if (f2fs_compressed_file(inode))
-		post_read_steps |= 1 << STEP_DECOMPRESS;
+		post_read_steps |= 1 << STEP_DECOMPRESS_NOWQ;
 #endif
 	if (post_read_steps) {
 		/* Due to the mempool, this never fails. */
@@ -2102,6 +2103,7 @@ int f2fs_read_multi_pages(struct compress_ctx *cc, struct bio **bio_ret,
 	for (i = 0; i < dic->nr_cpages; i++) {
 		struct page *page = dic->cpages[i];
 		block_t blkaddr;
+		struct bio_post_read_ctx *ctx;
 
 		blkaddr = data_blkaddr(dn.inode, dn.node_page,
 						dn.ofs_in_node + i + 1);
@@ -2136,6 +2138,11 @@ submit_and_realloc:
 
 		if (bio_add_page(bio, page, blocksize, 0) < blocksize)
 			goto submit_and_realloc;
+
+		/* tag STEP_DECOMPRESS to handle IO in wq */
+		ctx = bio->bi_private;
+		if (!(ctx->enabled_steps & (1 << STEP_DECOMPRESS)))
+			ctx->enabled_steps |= 1 << STEP_DECOMPRESS;
 
 		inc_page_count(sbi, F2FS_RD_DATA);
 		ClearPageError(page);
