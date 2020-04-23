@@ -709,33 +709,58 @@ static int __maybe_unused iostat_info_seq_show(struct seq_file *seq,
 
 	seq_printf(seq, "time:		%-16llu\n", now);
 
-	/* print app IOs */
+	/* print app write IOs */
+	seq_puts(seq, "[WRITE]\n");
 	seq_printf(seq, "app buffered:	%-16llu\n",
-				sbi->write_iostat[APP_BUFFERED_IO]);
+				sbi->rw_iostat[APP_BUFFERED_IO]);
 	seq_printf(seq, "app direct:	%-16llu\n",
-				sbi->write_iostat[APP_DIRECT_IO]);
+				sbi->rw_iostat[APP_DIRECT_IO]);
 	seq_printf(seq, "app mapped:	%-16llu\n",
-				sbi->write_iostat[APP_MAPPED_IO]);
+				sbi->rw_iostat[APP_MAPPED_IO]);
 
 	/* print fs IOs */
 	seq_printf(seq, "fs data:	%-16llu\n",
-				sbi->write_iostat[FS_DATA_IO]);
+				sbi->rw_iostat[FS_DATA_IO]);
 	seq_printf(seq, "fs node:	%-16llu\n",
-				sbi->write_iostat[FS_NODE_IO]);
+				sbi->rw_iostat[FS_NODE_IO]);
 	seq_printf(seq, "fs meta:	%-16llu\n",
-				sbi->write_iostat[FS_META_IO]);
+				sbi->rw_iostat[FS_META_IO]);
 	seq_printf(seq, "fs gc data:	%-16llu\n",
-				sbi->write_iostat[FS_GC_DATA_IO]);
+				sbi->rw_iostat[FS_GC_DATA_IO]);
 	seq_printf(seq, "fs gc node:	%-16llu\n",
-				sbi->write_iostat[FS_GC_NODE_IO]);
+				sbi->rw_iostat[FS_GC_NODE_IO]);
 	seq_printf(seq, "fs cp data:	%-16llu\n",
-				sbi->write_iostat[FS_CP_DATA_IO]);
+				sbi->rw_iostat[FS_CP_DATA_IO]);
 	seq_printf(seq, "fs cp node:	%-16llu\n",
-				sbi->write_iostat[FS_CP_NODE_IO]);
+				sbi->rw_iostat[FS_CP_NODE_IO]);
 	seq_printf(seq, "fs cp meta:	%-16llu\n",
-				sbi->write_iostat[FS_CP_META_IO]);
+				sbi->rw_iostat[FS_CP_META_IO]);
+
+	/* print app read IOs */
+	seq_puts(seq, "[READ]\n");
+	seq_printf(seq, "app buffered:	%-16llu\n",
+				sbi->rw_iostat[APP_BUFFERED_READ_IO]);
+	seq_printf(seq, "app direct:	%-16llu\n",
+				sbi->rw_iostat[APP_DIRECT_READ_IO]);
+	seq_printf(seq, "app mapped:	%-16llu\n",
+				sbi->rw_iostat[APP_MAPPED_READ_IO]);
+
+	/* print fs read IOs */
+	seq_printf(seq, "fs data:	%-16llu\n",
+				sbi->rw_iostat[FS_DATA_READ_IO]);
+	seq_printf(seq, "fs gc data:	%-16llu\n",
+				sbi->rw_iostat[FS_GDATA_READ_IO]);
+	seq_printf(seq, "fs compr_data:	%-16llu\n",
+				sbi->rw_iostat[FS_CDATA_READ_IO]);
+	seq_printf(seq, "fs node:	%-16llu\n",
+				sbi->rw_iostat[FS_NODE_READ_IO]);
+	seq_printf(seq, "fs meta:	%-16llu\n",
+				sbi->rw_iostat[FS_META_READ_IO]);
+
+	/* print other IOs */
+	seq_puts(seq, "[OTHER]\n");
 	seq_printf(seq, "fs discard:	%-16llu\n",
-				sbi->write_iostat[FS_DISCARD]);
+				sbi->rw_iostat[FS_DISCARD]);
 
 	return 0;
 }

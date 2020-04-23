@@ -1175,6 +1175,19 @@ enum iostat_type {
 	FS_CP_DATA_IO,			/* data IOs from checkpoint */
 	FS_CP_NODE_IO,			/* node IOs from checkpoint */
 	FS_CP_META_IO,			/* meta IOs from checkpoint */
+
+	/* READ IO */
+	APP_DIRECT_READ_IO,		/* app direct read IOs */
+	APP_BUFFERED_READ_IO,		/* app buffered read IOs */
+	APP_READ_IO,			/* app read IOs */
+	APP_MAPPED_READ_IO,		/* app mapped read IOs */
+	FS_DATA_READ_IO,		/* data read IOs */
+	FS_GDATA_READ_IO,		/* data read IOs from background gc */
+	FS_CDATA_READ_IO,		/* compressed data read IOs */
+	FS_NODE_READ_IO,		/* node read IOs */
+	FS_META_READ_IO,		/* meta read IOs */
+
+	/* other */
 	FS_DISCARD,			/* discard */
 	NR_IO_TYPE,
 };
@@ -1561,7 +1574,7 @@ struct f2fs_sb_info {
 
 	/* For app/fs IO statistics */
 	spinlock_t iostat_lock;
-	unsigned long long write_iostat[NR_IO_TYPE];
+	unsigned long long rw_iostat[NR_IO_TYPE];
 	bool iostat_enable;
 
 	/* For sysfs support */
@@ -3057,7 +3070,7 @@ static inline void f2fs_reset_iostat(struct f2fs_sb_info *sbi)
 
 	spin_lock(&sbi->iostat_lock);
 	for (i = 0; i < NR_IO_TYPE; i++)
-		sbi->write_iostat[i] = 0;
+		sbi->rw_iostat[i] = 0;
 	spin_unlock(&sbi->iostat_lock);
 }
 
@@ -3067,12 +3080,12 @@ static inline void f2fs_update_iostat(struct f2fs_sb_info *sbi,
 	if (!sbi->iostat_enable)
 		return;
 	spin_lock(&sbi->iostat_lock);
-	sbi->write_iostat[type] += io_bytes;
+	sbi->rw_iostat[type] += io_bytes;
 
 	if (type == APP_WRITE_IO || type == APP_DIRECT_IO)
-		sbi->write_iostat[APP_BUFFERED_IO] =
-			sbi->write_iostat[APP_WRITE_IO] -
-			sbi->write_iostat[APP_DIRECT_IO];
+		sbi->rw_iostat[APP_BUFFERED_IO] =
+			sbi->rw_iostat[APP_WRITE_IO] -
+			sbi->rw_iostat[APP_DIRECT_IO];
 	spin_unlock(&sbi->iostat_lock);
 }
 
