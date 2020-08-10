@@ -2120,7 +2120,7 @@ submit_and_realloc:
 				ret = PTR_ERR(bio);
 				dic->failed = true;
 				if (atomic_sub_and_test(dic->nr_cpages - i,
-							&dic->ref)) {
+							&dic->pending_pages)) {
 					f2fs_decompress_end_io(dic->rpages,
 							cc->cluster_size, true,
 							false);
@@ -3386,8 +3386,7 @@ static int f2fs_write_end(struct file *file,
 		f2fs_compress_write_end(inode, fsdata, page->index, copied);
 		f2fs_update_time(F2FS_I_SB(inode), REQ_TIME);
 
-		if (pos + copied > i_size_read(inode) &&
-				!f2fs_verity_in_progress(inode))
+		if (pos + copied > i_size_read(inode))
 			f2fs_i_size_write(inode, pos + copied);
 		return copied;
 	}
