@@ -435,6 +435,8 @@ mode_to_prot(struct inode *inode)
 		prot |= FIBF_OTR_READ;
 	if (mode & S_IWOTH)
 		prot |= FIBF_OTR_WRITE;
+	if (mode & 0007)
+		prot |= FIBF_OTR_DELETE;
 
 	AFFS_I(inode)->i_protect = prot;
 }
