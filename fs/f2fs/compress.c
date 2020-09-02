@@ -384,16 +384,17 @@ static int zstd_init_decompress_ctx(struct decompress_io_ctx *dic)
 	zstd_dstream *stream;
 	void *workspace;
 	size_t workspace_size;
+	unsigned int max_window_size =
+			MAX_COMPRESS_WINDOW_SIZE(dic->log_cluster_size);
 
-	workspace_size = zstd_dstream_workspace_bound(MAX_COMPRESS_WINDOW_SIZE);
+	workspace_size = zstd_dstream_workspace_bound(max_window_size);
 
 	workspace = f2fs_kvmalloc(F2FS_I_SB(dic->inode),
 					workspace_size, GFP_NOFS);
 	if (!workspace)
 		return -ENOMEM;
 
-	stream = zstd_init_dstream(MAX_COMPRESS_WINDOW_SIZE,
-					workspace, workspace_size);
+	stream = zstd_init_dstream(max_window_size, workspace, workspace_size);
 	if (!stream) {
 		printk_ratelimited("%sF2FS-fs (%s): %s ZSTD_initDStream failed\n",
 				KERN_ERR, F2FS_I_SB(dic->inode)->sb->s_id,
