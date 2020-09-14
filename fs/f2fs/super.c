@@ -1227,6 +1227,7 @@ static void f2fs_put_super(struct super_block *sb)
 	kfree(sbi->raw_super);
 
 	destroy_device_list(sbi);
+	f2fs_destroy_page_array_cache(sbi);
 	if (sbi->write_io_dummy)
 		mempool_destroy(sbi->write_io_dummy);
 #ifdef CONFIG_QUOTA
@@ -3480,13 +3481,15 @@ try_onemore:
 			goto free_percpu;
 		}
 	}
-
+	err = f2fs_init_page_array_cache(sbi);
+	if (err)
+		goto free_io_dummy;
 	/* get an inode for meta space */
 	sbi->meta_inode = f2fs_iget(sb, F2FS_META_INO(sbi));
 	if (IS_ERR(sbi->meta_inode)) {
 		f2fs_err(sbi, "Failed to read F2FS meta data inode");
 		err = PTR_ERR(sbi->meta_inode);
-		goto free_io_dummy;
+		goto free_page_array_cache;
 	}
 
 	err = f2fs_get_valid_checkpoint(sbi);
@@ -3760,6 +3763,8 @@ free_meta_inode:
 	make_bad_inode(sbi->meta_inode);
 	iput(sbi->meta_inode);
 	sbi->meta_inode = NULL;
+free_page_array_cache:
+	f2fs_destroy_page_array_cache(sbi);
 free_io_dummy:
 	mempool_destroy(sbi->write_io_dummy);
 free_percpu:
