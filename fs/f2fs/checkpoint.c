@@ -220,6 +220,7 @@ int f2fs_ra_meta_pages(struct f2fs_sb_info *sbi, block_t start, int nrpages,
 {
 	struct page *page;
 	block_t blkno = start;
+	block_t prev_blk_addr = 0;
 	struct f2fs_io_info fio = {
 		.sbi = sbi,
 		.type = META,
@@ -257,6 +258,9 @@ int f2fs_ra_meta_pages(struct f2fs_sb_info *sbi, block_t start, int nrpages,
 			/* get sit block addr */
 			fio.new_blkaddr = current_sit_addr(sbi,
 					blkno * SIT_ENTRY_PER_BLOCK);
+			if (blkno != start && prev_blk_addr + 1 != fio.new_blkaddr)
+				goto out;
+			prev_blk_addr = fio.new_blkaddr;
 			break;
 		case META_SSA:
 		case META_CP:
