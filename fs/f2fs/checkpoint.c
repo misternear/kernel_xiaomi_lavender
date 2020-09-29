@@ -255,6 +255,11 @@ int f2fs_ra_meta_pages(struct f2fs_sb_info *sbi, block_t start, int nrpages,
 			if (unlikely(blkno >= TOTAL_SEGS(sbi)))
 				goto out;
 			/* get sit block addr */
+			fio.blk_addr = current_sit_addr(sbi,
+					blkno * SIT_ENTRY_PER_BLOCK);
+			if (blkno != start && prev_blk_addr + 1 != fio.blk_addr)
+				goto out;
+			/* get sit block addr */
 			fio.new_blkaddr = current_sit_addr(sbi,
 					blkno * SIT_ENTRY_PER_BLOCK);
 			break;
