@@ -304,3 +304,11 @@ Date:		September 2019
 Contact:	"Hridya Valsaraju" <hridya@google.com>
 Description:	Average number of valid blocks.
 		Available when CONFIG_F2FS_STAT_FS=y.
+
+What:		/sys/fs/f2fs/<disk>/max_io_bytes
+Date:		December 2020
+Contact:	"Jaegeuk Kim" <jaegeuk@kernel.org>
+Description:	This gives a control to limit the bio size in f2fs.
+		Default is zero, which will follow underlying block layer limit,
+		whereas, if it has a certain bytes value, f2fs won't submit a
+		bio larger than that size.
