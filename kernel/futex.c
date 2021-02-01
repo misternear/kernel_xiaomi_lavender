@@ -3611,11 +3611,22 @@ void futex_mm_release(struct task_struct *tsk)
  */
 void futex_exit_recursive(struct task_struct *tsk)
 {
+	/* If the state is FUTEX_STATE_EXITING then futex_exit_mutex is held */
+	if (tsk->futex_state == FUTEX_STATE_EXITING)
+		mutex_unlock(&tsk->futex_exit_mutex);
 	tsk->futex_state = FUTEX_STATE_DEAD;
 }
 
 void futex_exit_release(struct task_struct *tsk)
 {
+	/*
+	 * Prevent various race issues against a concurrent incoming waiter
+	 * including live locks by forcing the waiter to block on
+	 * tsk->futex_exit_mutex when it observes FUTEX_STATE_EXITING in
+	 * attach_to_pi_owner().
+	 */
+	mutex_lock(&tsk->futex_exit_mutex);
+
 	/*
 	 * Switch the state to FUTEX_STATE_EXITING under tsk->pi_lock.
 	 *
@@ -3634,6 +3645,7 @@ void futex_exit_release(struct task_struct *tsk)
 	futex_exec_release(tsk);
 
 	tsk->futex_state = FUTEX_STATE_DEAD;
+	mutex_unlock(&tsk->futex_exit_mutex);
 }
 
 long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
