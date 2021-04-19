@@ -3098,7 +3098,6 @@ f2fs_hash_t f2fs_dentry_hash(const struct qstr *name_info,
 /*
  * node.c
  */
-struct dnode_of_data;
 struct node_info;
 
 int f2fs_check_nid_range(struct f2fs_sb_info *sbi, nid_t nid);
