@@ -1461,7 +1461,7 @@ struct f2fs_sb_info {
 	unsigned long long write_iostat[NR_IO_TYPE];
 	bool iostat_enable;
 
-	/* For sysfs suppport */
+	/* For sysfs support */
 	struct kobject s_kobj;			/* /sys/fs/f2fs/<devname> */
 	struct completion s_kobj_unregister;
 
