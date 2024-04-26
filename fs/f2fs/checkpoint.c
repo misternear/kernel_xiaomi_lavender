@@ -1654,23 +1654,17 @@ int f2fs_write_checkpoint(struct f2fs_sb_info *sbi, struct cp_control *cpc)
 
 	/* write cached NAT/SIT entries to NAT/SIT area */
 	err = f2fs_flush_nat_entries(sbi, cpc);
-	if (err) {
-		f2fs_err(sbi, "f2fs_flush_nat_entries failed err:%d, stop checkpoint", err);
-		f2fs_bug_on(sbi, !f2fs_cp_error(sbi));
+	if (err)
 		goto stop;
-	}
 
 	f2fs_flush_sit_entries(sbi, cpc);
 
 	/* unlock all the fs_lock[] in do_checkpoint() */
 	err = do_checkpoint(sbi, cpc);
-	if (err) {
-		f2fs_err(sbi, "do_checkpoint failed err:%d, stop checkpoint", err);
-		f2fs_bug_on(sbi, !f2fs_cp_error(sbi));
+	if (err)
 		f2fs_release_discard_addrs(sbi);
-	} else {
+	else
 		f2fs_clear_prefree_segments(sbi, cpc);
-	}
 
 	f2fs_restore_inmem_curseg(sbi, CURSEG_COLD_DATA_PINNED);
 stop:

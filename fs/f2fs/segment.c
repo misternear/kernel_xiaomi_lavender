@@ -765,22 +765,11 @@ int f2fs_flush_device_cache(struct f2fs_sb_info *sbi)
 		return 0;
 
 	for (i = 1; i < sbi->s_ndevs; i++) {
-		int count = DEFAULT_RETRY_IO_COUNT;
-
 		if (!f2fs_test_bit(i, (char *)&sbi->dirty_device))
 			continue;
-
-		do {
-			ret = __submit_flush_wait(sbi, FDEV(i).bdev);
-			if (ret)
-				congestion_wait(BLK_RW_ASYNC,
-						DEFAULT_IO_TIMEOUT);
-		} while (ret && --count);
-
-		if (ret) {
-			f2fs_stop_checkpoint(sbi, false);
+		ret = __submit_flush_wait(sbi, FDEV(i).bdev);
+		if (ret)
 			break;
-		}
 
 		spin_lock(&sbi->dev_lock);
 		f2fs_clear_bit(i, (char *)&sbi->dirty_device);
