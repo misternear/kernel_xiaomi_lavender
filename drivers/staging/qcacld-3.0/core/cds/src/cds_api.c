@@ -2995,6 +2995,7 @@ int cds_smmu_map_unmap(bool map, uint32_t num_buf, qdf_mem_info_t *buf_arr)
 
 uint32_t cds_get_mcc_to_scc_switch_mode(void)
 {
+#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	hdd_context_t *hdd_ctx;
 
 	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
@@ -3004,6 +3005,9 @@ uint32_t cds_get_mcc_to_scc_switch_mode(void)
 	}
 
 	return hdd_ctx->config->WlanMccToSccSwitchMode;
+#else
+	return 0;
+#endif
 }
 
 bool cds_is_sta_sap_scc_allowed_on_dfs_channel(void)
@@ -3018,10 +3022,12 @@ bool cds_is_sta_sap_scc_allowed_on_dfs_channel(void)
 		return false;
 	}
 
+#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	if ((hdd_ctx->config->WlanMccToSccSwitchMode !=
 				QDF_MCC_TO_SCC_SWITCH_DISABLE) &&
 			(hdd_ctx->config->sta_sap_scc_on_dfs_chan))
 		ret = true;
+#endif
 
 	return ret;
 }

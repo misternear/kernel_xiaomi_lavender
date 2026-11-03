@@ -5831,7 +5831,9 @@ static void hdd_set_def_rsne_override(
 {
 
 	hdd_debug("Set def values in roam profile");
+#ifdef WLAN_FEATURE_11W
 	roam_profile->MFPCapable = roam_profile->MFPEnabled;
+#endif
 	roam_profile->EncryptionType.numEntries = 2;
 	roam_profile->mcEncryptionType.numEntries = 2;
 	/* Use the cipher type in the RSN IE */
@@ -5935,6 +5937,7 @@ int hdd_set_genie_to_csr(hdd_adapter_t *pAdapter, eCsrAuthType *RSNAuthType)
 
 		pWextState->roamProfile.force_rsne_override = true;
 
+#ifdef WLAN_FEATURE_11W
 		hdd_debug("MFPEnabled %d", pWextState->roamProfile.MFPEnabled);
 		/*
 		 * Reset MFPEnabled if testmode RSNE passed doesnt have MFPR
@@ -5946,6 +5949,7 @@ int hdd_set_genie_to_csr(hdd_adapter_t *pAdapter, eCsrAuthType *RSNAuthType)
 			hdd_debug("Reset MFPEnabled");
 			pWextState->roamProfile.MFPEnabled = 0;
 		}
+#endif
 		/* If parsing failed set the def value for the roam profile */
 		if (status)
 			hdd_set_def_rsne_override(&pWextState->roamProfile,

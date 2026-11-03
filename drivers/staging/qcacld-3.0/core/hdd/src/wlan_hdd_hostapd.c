@@ -8133,10 +8133,12 @@ int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
 	pConfig->chan_switch_hostapd_rate_enabled =
 			iniConfig->chan_switch_hostapd_rate_enabled;
 
+#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	if (iniConfig->WlanMccToSccSwitchMode !=
 			QDF_MCC_TO_SCC_SWITCH_DISABLE) {
 		pConfig->chan_switch_hostapd_rate_enabled = false;
 	}
+#endif
 
 	pConfig->enOverLapCh = iniConfig->gEnableOverLapCh;
 	pConfig->dtim_period = pBeacon->dtim_period;
@@ -8217,10 +8219,13 @@ int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
 			}
 		}
 
-		if (iniConfig->ignoreCAC ||
-				((iniConfig->WlanMccToSccSwitchMode !=
+		if (iniConfig->ignoreCAC
+#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
+				|| ((iniConfig->WlanMccToSccSwitchMode !=
 				  QDF_MCC_TO_SCC_SWITCH_DISABLE) &&
-				 iniConfig->sta_sap_scc_on_dfs_chan))
+				 iniConfig->sta_sap_scc_on_dfs_chan)
+#endif
+				)
 			ignore_cac = 1;
 
 		wlansap_set_dfs_ignore_cac(hHal, ignore_cac);

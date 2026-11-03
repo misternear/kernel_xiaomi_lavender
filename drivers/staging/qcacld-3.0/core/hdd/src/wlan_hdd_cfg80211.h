@@ -213,16 +213,6 @@ typedef enum {
 #define WIFI_TDLS_EXTERNAL_CONTROL_SUPPORT	BIT(1)
 #define WIIF_TDLS_OFFCHANNEL_SUPPORT		BIT(2)
 
-#if defined(FEATURE_WLAN_CH_AVOID) || defined(FEATURE_WLAN_FORCE_SAP_SCC)
-#define HDD_MAX_AVOID_FREQ_RANGES   4
-
-/**
- * typedef struct sHddAvoidFreqList - avoid frequency list
- *
- * @avoidFreqRangeCount: Avoid frequency range count
- * @avoidFreqRange: Avoid frequency list
- */
-
 /* Feature defines */
 #define WIFI_FEATURE_INFRA              0x0001  /* Basic infrastructure mode */
 #define WIFI_FEATURE_INFRA_5G           0x0002  /* Support for 5 GHz Band */
@@ -257,6 +247,9 @@ typedef enum {
 
 /* Support Tx Power Limit setting */
 #define WIFI_FEATURE_SET_TX_POWER_LIMIT 0x4000000
+
+#if defined(FEATURE_WLAN_CH_AVOID) || defined(FEATURE_WLAN_FORCE_SAP_SCC)
+#define HDD_MAX_AVOID_FREQ_RANGES   4
 
 
 /**

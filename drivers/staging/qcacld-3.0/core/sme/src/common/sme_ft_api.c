@@ -485,8 +485,10 @@ void sme_reset_key(tHalHandle mac_handle, uint32_t vdev_id)
 	session = CSR_GET_SESSION(mac, vdev_id);
 	if (!session)
 		return;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	qdf_mem_zero(&session->psk_pmk, sizeof(session->psk_pmk));
 	session->pmk_len = 0;
+#endif
 	qdf_mem_zero(&session->eseCckmInfo, sizeof(session->eseCckmInfo));
 }
 

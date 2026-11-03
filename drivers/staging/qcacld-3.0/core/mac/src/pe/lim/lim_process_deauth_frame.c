@@ -66,9 +66,7 @@ lim_process_deauth_frame(tpAniSirGlobal pMac, uint8_t *pRxPacketInfo,
 	tpSirMacMgmtHdr pHdr;
 	tpPESession pRoamSessionEntry = NULL;
 	uint8_t roamSessionId;
-#ifdef WLAN_FEATURE_11W
 	uint32_t frameLen;
-#endif
 	int32_t frame_rssi;
 
 	pHdr = WMA_GET_RX_MAC_HEADER(pRxPacketInfo);

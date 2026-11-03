@@ -14811,8 +14811,10 @@ QDF_STATUS csr_roam_del_pmkid_from_cache(tpAniSirGlobal pMac,
 			     sizeof(tPmkidCacheInfo) * CSR_MAX_PMKID_ALLOWED);
 		pSession->NumPmkidCache = 0;
 		pSession->curr_cache_idx = 0;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
 		qdf_mem_zero(pSession->psk_pmk, sizeof(pSession->psk_pmk));
 		pSession->pmk_len = 0;
+#endif
 		return QDF_STATUS_SUCCESS;
 	}
 

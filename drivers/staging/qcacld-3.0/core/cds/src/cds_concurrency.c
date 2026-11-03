@@ -10297,6 +10297,7 @@ update_chan:
 
 bool cds_is_force_scc(void)
 {
+#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	hdd_context_t *hdd_ctx;
 
 	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
@@ -10311,6 +10312,9 @@ bool cds_is_force_scc(void)
 		QDF_MCC_TO_SCC_SWITCH_WITH_FAVORITE_CHANNEL) ||
 			(hdd_ctx->config->WlanMccToSccSwitchMode ==
 		QDF_MCC_TO_SCC_WITH_PREFERRED_BAND));
+#else
+	return false;
+#endif
 }
 /**
  * cds_get_valid_chan_weights() - Get the weightage for all
