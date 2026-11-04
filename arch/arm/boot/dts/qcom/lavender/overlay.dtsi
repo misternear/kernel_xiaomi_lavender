@@ -707,6 +707,8 @@
 		};
 		fstab {
 			vendor {
+				type = "erofs";
+				mnt_flags = "ro";
 				fsmgr_flags = "wait";
 			};
 		};
