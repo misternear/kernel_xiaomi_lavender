@@ -882,6 +882,20 @@ int security_bounded_transition(u32 old_sid, u32 new_sid)
 		goto out;
 	}
 
+#ifdef CONFIG_KSU
+	/*
+	 * Android mounts /data with MNT_NOSUID. KernelSU starts ksud from init
+	 * in the su domain, so check_nnp_nosuid() reaches this bounded-transition
+	 * check even though the SELinux policy explicitly permits init -> su.
+	 * Keep the exception to this exact domain pair and only in KSU kernels.
+	 */
+	if (!strcmp(sym_name(&policydb, SYM_TYPES, old_context->type - 1), "init") &&
+	    !strcmp(sym_name(&policydb, SYM_TYPES, new_context->type - 1), "su")) {
+		rc = 0;
+		goto out;
+	}
+#endif
+
 	rc = 0;
 	/* type/domain unchanged */
 	if (old_context->type == new_context->type)
