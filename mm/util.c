@@ -371,7 +371,11 @@ struct address_space *page_mapping(struct page *page)
 	if ((unsigned long)mapping & PAGE_MAPPING_ANON)
 		return NULL;
 
-	return (void *)((unsigned long)mapping & ~PAGE_MAPPING_FLAGS);
+	mapping &= ~PAGE_MAPPING_FLAGS;
+	if (unlikely(mapping < PAGE_SIZE))
+		return NULL;
+
+	return (void *)mapping;
 }
 EXPORT_SYMBOL(page_mapping);
 

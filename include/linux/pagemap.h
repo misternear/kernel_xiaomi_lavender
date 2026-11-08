@@ -49,7 +49,7 @@ static inline void mapping_clear_unevictable(struct address_space *mapping)
 
 static inline int mapping_unevictable(struct address_space *mapping)
 {
-	if (mapping)
+	if (mapping && !((unsigned long)mapping & (PAGE_MAPPING_FLAGS | (sizeof(void *) - 1))))
 		return test_bit(AS_UNEVICTABLE, &mapping->flags);
 	return !!mapping;
 }
