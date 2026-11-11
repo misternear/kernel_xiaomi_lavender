@@ -908,6 +908,10 @@ void cpr3_print_quots(struct cpr3_regulator *vreg);
 int cpr3_adjust_fused_open_loop_voltages(struct cpr3_regulator *vreg,
 			int *fuse_volt);
 int cpr3_adjust_open_loop_voltages(struct cpr3_regulator *vreg);
+void cpr3_undervolt_register_ctrl(struct cpr3_controller *ctrl);
+void cpr3_undervolt_unregister_ctrl(struct cpr3_controller *ctrl);
+int cpr3_undervolt_get_corner_volts(const char *rail, int corner,
+				    int *open_uv, int *floor_uv, int *ceil_uv);
 int cpr3_quot_adjustment(int ro_scale, int volt_adjust);
 int cpr3_voltage_adjustment(int ro_scale, int quot_adjust);
 int cpr3_parse_closed_loop_voltage_adjustments(struct cpr3_regulator *vreg,
@@ -1056,6 +1060,21 @@ static inline int cpr3_adjust_fused_open_loop_voltages(
 static inline int cpr3_adjust_open_loop_voltages(struct cpr3_regulator *vreg)
 {
 	return -EPERM;
+}
+
+static inline void cpr3_undervolt_register_ctrl(struct cpr3_controller *ctrl)
+{
+}
+
+static inline void cpr3_undervolt_unregister_ctrl(struct cpr3_controller *ctrl)
+{
+}
+
+static inline int cpr3_undervolt_get_corner_volts(const char *rail, int corner,
+						  int *open_uv, int *floor_uv,
+						  int *ceil_uv)
+{
+	return -ENODEV;
 }
 
 static inline int cpr3_quot_adjustment(int ro_scale, int volt_adjust)

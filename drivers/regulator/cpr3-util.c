@@ -22,6 +22,8 @@
 #include <linux/device.h>
 #include <linux/io.h>
 #include <linux/kernel.h>
+#include <linux/math64.h>
+#include <linux/moduleparam.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
@@ -1473,14 +1475,130 @@ done:
 	return rc;
 }
 
+/*
+ * Boot-time undervolt, in mV, one parameter per CPR controller. Linear in
+ * frequency, in the same way as the MediaTek EEM volt_offset: no change at
+ * the lowest-frequency corner and the full offset at the highest one.
+ *
+ *   <rail>_undervolt_mv=MAX[,MIN]
+ *
+ *   MAX  undervolt at the highest-frequency corner
+ *   MIN  undervolt at the lowest-frequency corner (default 0)
+ *
+ * Negative values are an OVERVOLT of that many mV (down to -CPR3_OV_MAX_MV).
+ * They also raise the corner ceilings, but never above the CPU rail cap
+ * (CPR3_OV_CPU_ABS_MAX_UV) on apc0/apc1.
+ *
+ * Corners in between are interpolated by corner frequency. The GPU's 750 MHz
+ * and 647 MHz corners both receive MAX. MIN == MAX gives a flat offset. The
+ * floor of each corner is lowered by the same amount so the
+ * open-loop clamp cannot undo it, and open-loop voltages are kept monotonic.
+ * Applied once at probe time, so changing a value needs a reboot.
+ *
+ *   cpr3_util.apc0_undervolt_mv=30	Silver cluster
+ *   cpr3_util.apc1_undervolt_mv=40	Gold cluster
+ *   cpr3_util.gfx_undervolt_mv=30,10	GPU
+ */
+#define CPR3_UV_MAX_ENTRIES	2
+#define CPR3_UV_MAX_MV		200
+#define CPR3_UV_MIN_VOLT	400000	/* never go below the PMIC base */
+#define CPR3_OV_MAX_MV		50	/* largest overvolt (negative value) */
+#define CPR3_OV_CPU_ABS_MAX_UV	992000	/* pm660_s6 max in the dtsi; CPU cap */
+
+static int apc0_undervolt_mv[CPR3_UV_MAX_ENTRIES];
+static int apc0_undervolt_mv_n;
+module_param_array(apc0_undervolt_mv, int, &apc0_undervolt_mv_n, 0444);
+
+static int apc1_undervolt_mv[CPR3_UV_MAX_ENTRIES];
+static int apc1_undervolt_mv_n;
+module_param_array(apc1_undervolt_mv, int, &apc1_undervolt_mv_n, 0444);
+
+static int gfx_undervolt_mv[CPR3_UV_MAX_ENTRIES];
+static int gfx_undervolt_mv_n;
+module_param_array(gfx_undervolt_mv, int, &gfx_undervolt_mv_n, 0444);
+
+/* Looks up the undervolt (uV at highest / lowest corner) for this rail. */
+static bool cpr3_get_undervolt_range(struct cpr3_regulator *vreg,
+				     int *hi_uv, int *lo_uv)
+{
+	const char *name = vreg->thread->ctrl->name;
+	int *arr, n;
+
+	if (!name)
+		return false;
+
+	if (!strcmp(name, "apc0")) {
+		arr = apc0_undervolt_mv;
+		n = apc0_undervolt_mv_n;
+	} else if (!strcmp(name, "apc1")) {
+		arr = apc1_undervolt_mv;
+		n = apc1_undervolt_mv_n;
+	} else if (!strcmp(name, "gfx")) {
+		arr = gfx_undervolt_mv;
+		n = gfx_undervolt_mv_n;
+	} else {
+		return false;
+	}
+
+	if (n <= 0)
+		return false;
+
+	*hi_uv = clamp(arr[0], -CPR3_OV_MAX_MV, CPR3_UV_MAX_MV) * 1000;
+	*lo_uv = (n > 1) ?
+		clamp(arr[1], -CPR3_OV_MAX_MV, CPR3_UV_MAX_MV) * 1000 : 0;
+
+	return *hi_uv || *lo_uv;
+}
+
+/* Highest voltage an overvolt may push a corner to (uV). */
+static int cpr3_overvolt_cap(struct cpr3_regulator *vreg)
+{
+	const char *name = vreg->thread->ctrl->name;
+
+	if (name && (!strcmp(name, "apc0") || !strcmp(name, "apc1")))
+		return CPR3_OV_CPU_ABS_MAX_UV;
+
+	return INT_MAX;
+}
+
+/* Undervolt for one corner in uV, linear in corner frequency (rounded). */
+static int cpr3_corner_undervolt_uv(struct cpr3_regulator *vreg, int corner,
+				    int hi_uv, int lo_uv)
+{
+	u32 f_min = vreg->corner[0].proc_freq;
+	u32 f_max = vreg->corner[vreg->corner_count - 1].proc_freq;
+	s64 num, den;
+
+	/*
+	 * Give the 750 MHz and 647 MHz GPU corners the same offset. Interpolate
+	 * lower GPU corners up to the second-highest frequency so the curve
+	 * reaches hi_uv at 647 MHz and remains flat for the highest corner.
+	 */
+	if (vreg->corner_count > 1 &&
+	    !strcmp(vreg->thread->ctrl->name, "gfx")) {
+		if (corner >= vreg->corner_count - 2)
+			return hi_uv;
+		f_max = vreg->corner[vreg->corner_count - 2].proc_freq;
+	}
+
+	if (f_max <= f_min)
+		return lo_uv;
+
+	num = (s64)(hi_uv - lo_uv) * (s64)(vreg->corner[corner].proc_freq - f_min);
+	den = f_max - f_min;
+	num += (num < 0) ? -(den / 2) : (den / 2);
+
+	return lo_uv + (int)div64_s64(num, den);
+}
+
 /**
- * cpr3_adjust_open_loop_voltages() - adjust the open-loop voltages for each
- *		corner according to device tree values
+ * cpr3_adjust_open_loop_voltages_dt() - apply the device tree open-loop
+ *		voltage adjustment for each corner
  * @vreg:		Pointer to the CPR3 regulator
  *
  * Return: 0 on success, errno on failure
  */
-int cpr3_adjust_open_loop_voltages(struct cpr3_regulator *vreg)
+static int cpr3_adjust_open_loop_voltages_dt(struct cpr3_regulator *vreg)
 {
 	int i, rc, prev_volt, min_volt;
 	int *volt_adjust, *volt_diff;
@@ -1547,6 +1665,198 @@ done:
 	kfree(volt_adjust);
 	return rc;
 }
+
+/**
+ * cpr3_adjust_open_loop_voltages() - adjust the open-loop voltages for each
+ *		corner according to device tree values and the optional
+ *		<rail>_undervolt_mv boot parameters
+ * @vreg:		Pointer to the CPR3 regulator
+ *
+ * Return: 0 on success, errno on failure
+ */
+int cpr3_adjust_open_loop_voltages(struct cpr3_regulator *vreg)
+{
+	struct cpr3_corner *corner;
+	int i, rc, uv, hi_uv, lo_uv, new_volt, cap;
+
+	rc = cpr3_adjust_open_loop_voltages_dt(vreg);
+	if (rc)
+		return rc;
+
+	if (!vreg->corner_count || !cpr3_get_undervolt_range(vreg, &hi_uv, &lo_uv))
+		return 0;
+
+	for (i = 0; i < vreg->corner_count; i++) {
+		corner = &vreg->corner[i];
+		uv = cpr3_corner_undervolt_uv(vreg, i, hi_uv, lo_uv);
+
+		new_volt = corner->open_loop_volt - uv;	/* uv < 0 raises it */
+
+		if (uv < 0) {
+			/* Overvolt: raise the ceilings too, within the rail cap */
+			cap = cpr3_overvolt_cap(vreg);
+			if (new_volt > cap)
+				new_volt = max(cap, corner->open_loop_volt);
+			if (new_volt > corner->ceiling_volt)
+				corner->ceiling_volt = new_volt;
+			if (new_volt > corner->abs_ceiling_volt)
+				corner->abs_ceiling_volt = new_volt;
+		} else {
+			new_volt = max(new_volt, CPR3_UV_MIN_VOLT);
+
+			/* Lower the floor too, or the open-loop clamp undoes it */
+			corner->floor_volt = max(corner->floor_volt - uv,
+						 CPR3_UV_MIN_VOLT);
+			if (corner->floor_volt > corner->ceiling_volt)
+				corner->floor_volt = corner->ceiling_volt;
+		}
+
+		cpr3_info(vreg, "%s corner %d (%u Hz): open-loop %d --> %d uV\n",
+			  uv < 0 ? "overvolt" : "undervolt", i,
+			  corner->proc_freq, corner->open_loop_volt, new_volt);
+		corner->open_loop_volt = new_volt;
+	}
+
+	/* Keep open-loop voltages monotonic, as the DT adjustment path does */
+	for (i = 1; i < vreg->corner_count; i++)
+		if (vreg->corner[i].open_loop_volt <
+		    vreg->corner[i - 1].open_loop_volt)
+			vreg->corner[i].open_loop_volt =
+				vreg->corner[i - 1].open_loop_volt;
+
+	return 0;
+}
+
+/*
+ * Read-only voltage readout, intended for monitoring tools:
+ *
+ *   /sys/module/cpr3_util/parameters/gfx_volt	GPU
+ *
+ * Reads "<open_loop> <floor> <ceiling> <last>", all in uV, taken from the
+ * aggregated corner the controller is currently running. open_loop is the
+ * voltage software programs for that corner, i.e. including any
+ * <rail>_undervolt_mv applied above. With hardware closed-loop the CPR
+ * hardware trims the real rail voltage between floor and ceiling without
+ * notifying software, so open_loop is the programmed target, not a measured
+ * rail voltage. Reads "na" until the controller has registered.
+ *
+ * The apc0 and apc1 controllers use hardware closed-loop with the OSM
+ * hardware switching corners by frequency, so software never aggregates a
+ * corner for them. Their readout lives in clk-cpu-osm and uses
+ * cpr3_undervolt_get_corner_volts() below.
+ */
+enum {
+	CPR3_UV_RAIL_APC0,
+	CPR3_UV_RAIL_APC1,
+	CPR3_UV_RAIL_GFX,
+	CPR3_UV_RAIL_COUNT,
+};
+
+static struct cpr3_controller *cpr3_uv_ctrl[CPR3_UV_RAIL_COUNT];
+
+static int cpr3_uv_rail_by_name(const char *name)
+{
+	if (!name)
+		return -1;
+	if (!strcmp(name, "apc0"))
+		return CPR3_UV_RAIL_APC0;
+	if (!strcmp(name, "apc1"))
+		return CPR3_UV_RAIL_APC1;
+	if (!strcmp(name, "gfx"))
+		return CPR3_UV_RAIL_GFX;
+	return -1;
+}
+
+static int cpr3_uv_rail_index(struct cpr3_controller *ctrl)
+{
+	return cpr3_uv_rail_by_name(ctrl->name);
+}
+
+void cpr3_undervolt_register_ctrl(struct cpr3_controller *ctrl)
+{
+	int idx = cpr3_uv_rail_index(ctrl);
+
+	if (idx >= 0)
+		WRITE_ONCE(cpr3_uv_ctrl[idx], ctrl);
+}
+
+void cpr3_undervolt_unregister_ctrl(struct cpr3_controller *ctrl)
+{
+	int idx = cpr3_uv_rail_index(ctrl);
+
+	if (idx >= 0 && READ_ONCE(cpr3_uv_ctrl[idx]) == ctrl)
+		WRITE_ONCE(cpr3_uv_ctrl[idx], NULL);
+}
+
+/**
+ * cpr3_undervolt_get_corner_volts() - look up the voltages of one corner
+ * @rail:	Controller name: "apc0", "apc1" or "gfx"
+ * @corner:	0-based corner index, i.e. virtual corner - 1
+ * @open_uv:	Output: open-loop voltage in uV
+ * @floor_uv:	Output: floor voltage in uV
+ * @ceil_uv:	Output: ceiling voltage in uV
+ *
+ * Unlike regulator_list_corner_voltage(), which only returns the ceiling,
+ * this also returns the open-loop and floor voltages, which are the ones that
+ * the <rail>_undervolt_mv parameters change.
+ *
+ * Return: 0 on success, -ENODEV if the controller is not registered,
+ *	   -EINVAL if the corner is out of range
+ */
+int cpr3_undervolt_get_corner_volts(const char *rail, int corner,
+				    int *open_uv, int *floor_uv, int *ceil_uv)
+{
+	struct cpr3_controller *ctrl;
+	struct cpr3_regulator *vreg;
+	int idx = cpr3_uv_rail_by_name(rail);
+
+	if (idx < 0)
+		return -EINVAL;
+
+	ctrl = READ_ONCE(cpr3_uv_ctrl[idx]);
+	if (!ctrl || !ctrl->thread || ctrl->thread_count < 1 ||
+	    !ctrl->thread[0].vreg || ctrl->thread[0].vreg_count < 1)
+		return -ENODEV;
+
+	vreg = &ctrl->thread[0].vreg[0];
+	if (corner < 0 || corner >= vreg->corner_count)
+		return -EINVAL;
+
+	*open_uv = vreg->corner[corner].open_loop_volt;
+	*floor_uv = vreg->corner[corner].floor_volt;
+	*ceil_uv = vreg->corner[corner].ceiling_volt;
+
+	return 0;
+}
+
+static int cpr3_volt_get(char *buffer, const struct kernel_param *kp)
+{
+	struct cpr3_controller *ctrl =
+		READ_ONCE(*(struct cpr3_controller **)kp->arg);
+	struct cpr3_corner *aggr;
+
+	if (!ctrl)
+		return scnprintf(buffer, PAGE_SIZE, "na\n");
+
+	/* Lockless on purpose: plain ints, only used for monitoring */
+	aggr = &ctrl->aggr_corner;
+	return scnprintf(buffer, PAGE_SIZE, "%d %d %d %d\n",
+			 aggr->open_loop_volt, aggr->floor_volt,
+			 aggr->ceiling_volt, aggr->last_volt);
+}
+
+static int cpr3_volt_set(const char *val, const struct kernel_param *kp)
+{
+	return -EPERM;
+}
+
+static const struct kernel_param_ops cpr3_volt_ops = {
+	.set = cpr3_volt_set,
+	.get = cpr3_volt_get,
+};
+
+module_param_cb(gfx_volt, &cpr3_volt_ops,
+		&cpr3_uv_ctrl[CPR3_UV_RAIL_GFX], 0444);
 
 /**
  * cpr3_quot_adjustment() - returns the quotient adjustment value resulting from
