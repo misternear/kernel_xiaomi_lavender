@@ -848,6 +848,74 @@ static struct clk_osm perfcl_clk = {
 	.hw.init = &osm_clks_init[1],
 };
 
+/*
+ * Defined in drivers/regulator/cpr3-util.c, which is not included here to
+ * keep the CPR3 internals out of the clock driver.
+ */
+#if IS_ENABLED(CONFIG_REGULATOR_CPR3)
+extern int cpr3_undervolt_get_corner_volts(const char *rail, int corner,
+					   int *open_uv, int *floor_uv,
+					   int *ceil_uv);
+#else
+static inline int cpr3_undervolt_get_corner_volts(const char *rail, int corner,
+						  int *open_uv, int *floor_uv,
+						  int *ceil_uv)
+{
+	return -ENODEV;
+}
+#endif
+
+/*
+ * Read-only voltage readout of the OSM state each cluster is currently in:
+ *
+ *   /sys/module/clk_cpu_osm/parameters/pwrcl_volt	Silver cluster
+ *   /sys/module/clk_cpu_osm/parameters/perfcl_volt	Gold cluster
+ *
+ * Each file reads "<open_loop> <floor> <ceiling> <freq_khz> <virtual_corner>",
+ * voltages in uV. The OSM hardware picks the corner from the performance state
+ * and CPR never sees it, so it is derived here from the desired performance
+ * state, the same one clk_osm_recalc_rate() reports, and looked up in the CPR
+ * corner table. open_loop is the programmed voltage including any
+ * <rail>_undervolt_mv. The CPR hardware trims the real rail voltage between
+ * floor and ceiling, and other OSM inputs (ACD, LMH) may override the desired
+ * state, so this is the programmed target and not a measurement.
+ */
+static int clk_osm_volt_get(char *buffer, const struct kernel_param *kp)
+{
+	struct clk_osm *c = kp->arg;
+	int idx, corner, open_uv, floor_uv, ceil_uv;
+
+	if (!c->vbases[OSM_BASE] || !c->num_entries)
+		return scnprintf(buffer, PAGE_SIZE, "na\n");
+
+	idx = clk_osm_read_reg(c, DCVS_PERF_STATE_DESIRED_REG);
+	if (idx < 0 || idx >= c->num_entries)
+		return scnprintf(buffer, PAGE_SIZE, "na\n");
+
+	corner = c->osm_table[idx].virtual_corner;
+	if (cpr3_undervolt_get_corner_volts(c->cluster_num ? "apc1" : "apc0",
+					    corner, &open_uv, &floor_uv,
+					    &ceil_uv))
+		return scnprintf(buffer, PAGE_SIZE, "na\n");
+
+	return scnprintf(buffer, PAGE_SIZE, "%d %d %d %ld %d\n", open_uv,
+			 floor_uv, ceil_uv, c->osm_table[idx].frequency / 1000,
+			 corner);
+}
+
+static int clk_osm_volt_set(const char *val, const struct kernel_param *kp)
+{
+	return -EPERM;
+}
+
+static const struct kernel_param_ops clk_osm_volt_ops = {
+	.set = clk_osm_volt_set,
+	.get = clk_osm_volt_get,
+};
+
+module_param_cb(pwrcl_volt, &clk_osm_volt_ops, &pwrcl_clk, 0444);
+module_param_cb(perfcl_volt, &clk_osm_volt_ops, &perfcl_clk, 0444);
+
 static struct clk_hw *osm_qcom_clk_hws[] = {
 	[SYS_APCSAUX_CLK_GCC] = &sys_apcsaux_clk_gcc.hw,
 	[PWRCL_CLK] = &pwrcl_clk.hw,
