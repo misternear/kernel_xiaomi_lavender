@@ -228,9 +228,13 @@ static int erofs_load_compr_cfgs(struct super_block *sb,
 		case Z_EROFS_COMPRESSION_LZ4:
 			ret = z_erofs_load_lz4_config(sb, dsb, data, size);
 			break;
+		case Z_EROFS_COMPRESSION_ZSTD:
+			ret = z_erofs_load_zstd_config(sb, dsb, data, size);
+			break;
 		default:
-			DBG_BUGON(1);
-			ret = -EFAULT;
+			erofs_err(sb, "compression algorithm %u isn't supported",
+				  alg);
+			ret = -EOPNOTSUPP;
 		}
 		kfree(data);
 		if (ret)

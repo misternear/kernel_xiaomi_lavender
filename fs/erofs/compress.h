@@ -83,4 +83,8 @@ static inline bool z_erofs_put_shortlivedpage(struct list_head *pagepool,
 int z_erofs_decompress(struct z_erofs_decompress_req *rq,
 		       struct list_head *pagepool);
 
+#ifdef CONFIG_EROFS_FS_ZIP_ZSTD
+int z_erofs_zstd_decompress(struct z_erofs_decompress_req *rq);
+#endif
+
 #endif

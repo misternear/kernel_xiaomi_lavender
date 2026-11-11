@@ -24,6 +24,11 @@ struct z_erofs_decompressor {
 	int (*prepare_destpages)(struct z_erofs_decompress_req *rq,
 				 struct list_head *pagepool);
 	int (*decompress)(struct z_erofs_decompress_req *rq, u8 *out);
+	/*
+	 * algorithms which map (and may sleep on) their own input / output
+	 * pages instead of relying on one contiguous mapped destination.
+	 */
+	int (*decompress_pages)(struct z_erofs_decompress_req *rq);
 	char *name;
 };
 
@@ -265,6 +270,12 @@ static struct z_erofs_decompressor decompressors[] = {
 		.decompress = z_erofs_lz4_decompress,
 		.name = "lz4"
 	},
+#ifdef CONFIG_EROFS_FS_ZIP_ZSTD
+	[Z_EROFS_COMPRESSION_ZSTD] = {
+		.decompress_pages = z_erofs_zstd_decompress,
+		.name = "zstd"
+	},
+#endif
 };
 
 static void copy_from_pcpubuf(struct page **out, const char *dst,
@@ -401,7 +412,18 @@ static int z_erofs_shifted_transform(const struct z_erofs_decompress_req *rq,
 int z_erofs_decompress(struct z_erofs_decompress_req *rq,
 		       struct list_head *pagepool)
 {
+	const struct z_erofs_decompressor *alg = decompressors + rq->alg;
+
 	if (rq->alg == Z_EROFS_COMPRESSION_SHIFTED)
 		return z_erofs_shifted_transform(rq, pagepool);
+
+	if (alg->decompress_pages)
+		return alg->decompress_pages(rq);
+
+	if (!alg->decompress) {
+		erofs_err(rq->sb, "compression algorithm %u isn't enabled on this kernel",
+			  rq->alg);
+		return -EOPNOTSUPP;
+	}
 	return z_erofs_decompress_generic(rq, pagepool);
 }

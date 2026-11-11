@@ -4,6 +4,7 @@
  *             https://www.huawei.com/
  */
 #include "internal.h"
+#include "compress.h"
 #include <asm/unaligned.h>
 #include <trace/events/erofs.h>
 
@@ -577,6 +578,12 @@ int z_erofs_map_blocks_iter(struct inode *inode,
 	map->m_llen = end - map->m_la;
 	map->m_pa = blknr_to_addr(m.pblk);
 	map->m_flags |= EROFS_MAP_MAPPED;
+
+	/* only HEAD1 clusters are supported, so use the first algorithm */
+	if (map->m_flags & EROFS_MAP_ZIPPED)
+		map->m_algorithmformat = vi->z_algorithmtype[0];
+	else
+		map->m_algorithmformat = Z_EROFS_COMPRESSION_SHIFTED;
 
 	err = z_erofs_get_extent_compressedlen(&m, initial_lcn);
 	if (err)
