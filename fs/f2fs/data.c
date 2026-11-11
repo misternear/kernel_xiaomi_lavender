@@ -273,14 +273,18 @@ static void f2fs_write_end_io(struct bio *bio)
 			continue;
 		}
 
+		/*
+		 * Unwrap the fscrypt bounce page first: its page->private is a
+		 * struct fscrypt_ctx, not a compress_io_ctx.
+		 */
+		fscrypt_pullback_bio_page(&page, true);
+
 #ifdef CONFIG_F2FS_FS_COMPRESSION
 		if (f2fs_is_compressed_page(page)) {
 			f2fs_compress_write_end_io(bio, page);
 			continue;
 		}
 #endif
-
-		fscrypt_pullback_bio_page(&page, true);
 
 		if (unlikely(bio->bi_error)) {
 			set_bit(AS_EIO, &page->mapping->flags);
@@ -490,12 +494,14 @@ static bool __has_merged_page(struct bio *bio, struct inode *inode,
 	bio_for_each_segment_all(bvec, bio, i) {
 		struct page *target = bvec->bv_page;
 
+		/* fscrypt bounce page (no mapping) must be unwrapped first */
+		if (!target->mapping)
+			target = fscrypt_control_page(target);
+
 		if (f2fs_is_compressed_page(target)) {
 			target = f2fs_compress_control_page(target);
 			if (IS_ERR(target))
 				continue;
-		} else if (!target->mapping) {
-			target = fscrypt_control_page(target);
 		}
 
 		if (inode && inode == target->mapping->host)
@@ -2351,8 +2357,8 @@ int f2fs_encrypt_one_page(struct f2fs_io_info *fio)
 	f2fs_wait_on_block_writeback(inode, fio->old_blkaddr);
 
 retry_encrypt:
-	fio->encrypted_page = fscrypt_encrypt_page(inode, fio->page,
-			PAGE_SIZE, 0, fio->page->index, gfp_flags);
+	fio->encrypted_page = fscrypt_encrypt_page(inode, page,
+			PAGE_SIZE, 0, page->index, gfp_flags);
 	if (IS_ERR(fio->encrypted_page)) {
 		/* flush pending IOs and wait for a while in the ENOMEM case */
 		if (PTR_ERR(fio->encrypted_page) == -ENOMEM) {

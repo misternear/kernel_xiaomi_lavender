@@ -3964,11 +3964,6 @@ static inline void set_compress_context(struct inode *inode)
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
 
-	if (f2fs_encrypted_inode(inode)) {
-		/* encrypted+compressed not supported in this 4.4 backport */
-		return;
-	}
-
 	F2FS_I(inode)->i_compress_algorithm =
 			F2FS_OPTION(sbi).compress_algorithm;
 	F2FS_I(inode)->i_log_cluster_size =
@@ -4105,8 +4100,6 @@ static inline bool f2fs_may_encrypt(struct inode *inode)
 
 static inline bool f2fs_may_compress(struct inode *inode)
 {
-	if (f2fs_encrypted_inode(inode))
-		return false;
 	if (IS_SWAPFILE(inode) || f2fs_is_pinned_file(inode) ||
 				f2fs_is_atomic_file(inode) ||
 				f2fs_is_volatile_file(inode))

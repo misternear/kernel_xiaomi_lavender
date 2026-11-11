@@ -76,6 +76,9 @@ bool f2fs_is_compressed_page(struct page *page)
 		return false;
 	if (!page_private(page))
 		return false;
+	/* fscrypt bounce page: no mapping, page->private is a fscrypt_ctx */
+	if (!page->mapping)
+		return false;
 	if (IS_ATOMIC_WRITTEN_PAGE(page) || IS_DUMMY_WRITTEN_PAGE(page))
 		return false;
 	/*
@@ -507,8 +510,6 @@ bool f2fs_is_compress_backend_ready(struct inode *inode)
 {
 	if (!f2fs_compressed_file(inode))
 		return true;
-	if (f2fs_encrypted_inode(inode))
-		return false;
 	return f2fs_cops[F2FS_I(inode)->i_compress_algorithm];
 }
 
