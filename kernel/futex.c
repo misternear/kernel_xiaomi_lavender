@@ -3592,6 +3592,7 @@ void futex_mm_release(struct task_struct *tsk)
 		exit_pi_state_list(tsk);
 }
 
+/**
  * futex_exit_recursive - Set the tasks futex state to FUTEX_STATE_DEAD
  * @tsk:	task to set the state on
  *
@@ -3635,7 +3636,6 @@ void futex_exit_release(struct task_struct *tsk)
 	tsk->futex_state = FUTEX_STATE_DEAD;
 }
 
->>>>>>> 6eaebabf3bca (futex: Sanitize exit state handling)
 long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
 		u32 __user *uaddr2, u32 val2, u32 val3)
 {
