@@ -1950,8 +1950,6 @@ error_tgt_fput:
 		loop_check_gen++;
 		mutex_unlock(&epmutex);
 	}
-		mutex_unlock(&epmutex);
-	}
 
 	fdput(tf);
 error_fput:
