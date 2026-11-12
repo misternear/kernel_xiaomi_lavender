@@ -941,9 +941,11 @@ inserted:
 				if (error)
 					goto cleanup_dquot;
 			}
-			mb2_cache_entry_touch(ext4_mb_cache, ce);
-			mb2_cache_entry_put(ext4_mb_cache, ce);
-			ce = NULL;
+			if (ce) {
+				mb2_cache_entry_touch(ext4_mb_cache, ce);
+				mb2_cache_entry_put(ext4_mb_cache, ce);
+				ce = NULL;
+			}
 		} else if (bs->bh && s->base == bs->bh->b_data) {
 			/* We were modifying this block in-place. */
 			ea_bdebug(bs->bh, "keeping this block");
