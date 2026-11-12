@@ -1562,6 +1562,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 #endif
 	INIT_LIST_HEAD(&p->pi_state_list);
 	p->pi_state_cache = NULL;
+	mutex_init(&p->futex_exit_mutex);
 #endif
 	/*
 	 * sigaltstack should be cleared when sharing the same VM
