@@ -636,6 +636,13 @@ static int fg_get_jeita_threshold(struct fg_chip *chip,
 
 #define BATT_TEMP_NUMR		1
 #define BATT_TEMP_DENR		1
+/*
+ * Calibration offset (deciDegC) subtracted from the reported battery temp.
+ * For aftermarket packs whose NTC reads high. Measure it first: cool the phone
+ * down and compare against a real thermometer. Keep it a multiple of 10 and
+ * no larger than the error you measured. 0 disables it.
+ */
+#define BATT_TEMP_OFFSET_DECI	30
 static int fg_get_battery_temp(struct fg_chip *chip, int *val)
 {
 	int rc = 0, temp;
@@ -687,6 +694,8 @@ static int fg_get_battery_temp(struct fg_chip *chip, int *val)
 		}
 	}
 
+
+	temp -= BATT_TEMP_OFFSET_DECI;
 
 	*val = temp;
 	return 0;

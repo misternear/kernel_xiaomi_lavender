@@ -104,7 +104,7 @@
 	qcom,fg-chg-term-current = <200>;
 	qcom,fg-sys-term-current = <300>;
 	qcom,fg-recharge-voltage = <4350>;
-	qcom,fg-jeita-thresholds = <0 15 45 60>;
+	qcom,fg-jeita-thresholds = <0 15 48 63>;
 	qcom,fg-jeita-hyst-temp = <0>;
 	qcom,battery-thermal-coefficients = [d2 50 ff];
 };
