@@ -57,7 +57,6 @@ union futex_key {
 #ifdef CONFIG_FUTEX
 enum {
 	FUTEX_STATE_OK,
-	FUTEX_STATE_OK,
 	FUTEX_STATE_EXITING,
 	FUTEX_STATE_DEAD,
 };
@@ -69,9 +68,8 @@ static inline void futex_init_task(struct task_struct *tsk)
 #endif
 	INIT_LIST_HEAD(&tsk->pi_state_list);
 	tsk->pi_state_cache = NULL;
-	sk->futex_state = FUTEX_STATE_OK;
+	tsk->futex_state = FUTEX_STATE_OK;
 	mutex_init(&tsk->futex_exit_mutex);
-}
 }
 
 void futex_exit_recursive(struct task_struct *tsk);
