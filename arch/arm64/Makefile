@@ -77,13 +77,10 @@ KBUILD_CFLAGS	+= -fno-asynchronous-unwind-tables
 KBUILD_AFLAGS	+= $(lseinstr) $(vdso32)
 
 ifeq ($(CONFIG_CPU_BIG_ENDIAN), y)
-KBUILD_CPPFLAGS	+= -mbig-endian
-AS		+= -EB
-LD		+= -EB
-else
-KBUILD_CPPFLAGS	+= -mlittle-endian
-AS		+= -EL
-LD		+= -EL
+# AArch64 is little-endian only.  The -mbig-endian/-mlittle-endian (and
+# -EB/-EL) options were removed from newer toolchains (GCC >= 10, Clang) for
+# AArch64, so they are omitted here.  These flags were no-ops for AArch64
+# anyway.
 endif
 
 CHECKFLAGS	+= -D__aarch64__
