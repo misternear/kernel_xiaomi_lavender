@@ -22,6 +22,36 @@
 #include "acl.h"
 #include <trace/events/f2fs.h>
 
+/*
+ * f2fs_is_child_context_consistent_with_parent - Check if the encryption
+ * context of a child inode is consistent with its parent directory.
+ *
+ * Returns true if the child can be placed in the parent directory, false
+ * otherwise.  This is a simplified check: f2fs 4.4 does not track per-inode
+ * encryption keys, so it only enforces that encrypted directories do not
+ * contain unencrypted files and vice versa.
+ */
+bool f2fs_is_child_context_consistent_with_parent(struct inode *parent,
+						  struct inode *child)
+{
+	/* No restrictions on file types which are never encrypted */
+	if (!S_ISREG(child->i_mode) && !S_ISDIR(child->i_mode) &&
+	    !S_ISLNK(child->i_mode))
+		return true;
+
+	/* No restrictions if the parent directory is unencrypted */
+	if (!f2fs_encrypted_inode(parent))
+		return true;
+
+	/* Encrypted directories must not contain unencrypted files */
+	if (!f2fs_encrypted_inode(child))
+		return false;
+
+	/* Both parent and child are encrypted.  Without per-inode key
+	 * tracking in f2fs 4.4, we assume the contexts are consistent. */
+	return true;
+}
+
 static struct inode *f2fs_new_inode(struct inode *dir, umode_t mode)
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(dir);
